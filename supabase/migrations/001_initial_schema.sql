@@ -5,8 +5,7 @@
 -- Run order: 001 → 002 (RLS policies) → 003 (Storage)
 -- =============================================================================
 
--- Enable UUID generation
-create extension if not exists "uuid-ossp";
+-- gen_random_uuid() is built-in since Postgres 13 — no extension needed.
 
 -- =============================================================================
 -- PROFILES
@@ -39,7 +38,7 @@ comment on column public.profiles.subscription_status is
 -- Top-level container for a series of messages with Claude.
 -- =============================================================================
 create table public.conversations (
-  id           uuid primary key default uuid_generate_v4(),
+  id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references public.profiles(id) on delete cascade,
   title        text not null default 'New conversation',
   system_prompt text,
@@ -64,7 +63,7 @@ create index conversations_user_id_updated_at_idx
 -- Individual messages within a conversation.
 -- =============================================================================
 create table public.messages (
-  id              uuid primary key default uuid_generate_v4(),
+  id              uuid primary key default gen_random_uuid(),
   conversation_id uuid not null references public.conversations(id) on delete cascade,
   user_id         uuid not null references public.profiles(id) on delete cascade,
   role            text not null check (role in ('user', 'assistant', 'tool')),
@@ -93,7 +92,7 @@ create index messages_conversation_id_created_at_idx
 -- Example CRUD resource. Demonstrates the pattern for adding any new resource.
 -- =============================================================================
 create table public.notes (
-  id         uuid primary key default uuid_generate_v4(),
+  id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references public.profiles(id) on delete cascade,
   title      text not null,
   content    text not null default '',
@@ -120,7 +119,7 @@ create index notes_fts_idx on public.notes
 -- Records token usage per message for cost monitoring and rate limiting.
 -- =============================================================================
 create table public.usage_tracking (
-  id              uuid primary key default uuid_generate_v4(),
+  id              uuid primary key default gen_random_uuid(),
   user_id         uuid not null references public.profiles(id) on delete cascade,
   conversation_id uuid references public.conversations(id) on delete set null,
   message_id      uuid references public.messages(id) on delete set null,

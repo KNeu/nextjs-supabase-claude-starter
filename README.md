@@ -140,7 +140,7 @@ Create `supabase/migrations/004_projects.sql`, run it in the SQL Editor:
 
 ```sql
 create table public.projects (
-  id         uuid primary key default uuid_generate_v4(),
+  id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references public.profiles(id) on delete cascade,
   name       text not null,
   created_at timestamptz default now() not null,

@@ -22,7 +22,7 @@ async function startCheckout() {
   const adminClient = createAdminClient();
   const { data: profile } = await adminClient
     .from("profiles")
-    .select("email, stripe_customer_id")
+    .select("*")
     .eq("id", user.id)
     .single();
 
