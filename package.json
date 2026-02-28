@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": false,
   "license": "MIT",
-  "description": "Production-grade starter template: Next.js 15 + Supabase + Claude AI chat with auth, billing, and CRUD patterns",
+  "description": "Production-grade starter template: Next.js 16 + Supabase + Claude AI chat with auth, billing, and CRUD patterns",
   "keywords": [
     "nextjs",
     "supabase",
@@ -23,10 +23,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
-    "db:generate-types": "supabase gen types typescript --local > src/types/database.types.ts",
+    "db:generate-types": "supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > src/types/database.types.ts",
+    "db:generate-types:local": "supabase gen types typescript --local > src/types/database.types.ts",
     "db:migrate": "supabase db push",
     "db:reset": "supabase db reset",
-    "db:seed": "supabase db reset --linked --no-verify-jwt",
     "validate": "npm run typecheck && npm run lint && npm run format:check"
   },
   "dependencies": {

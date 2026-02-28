@@ -2,14 +2,14 @@
 
 A production-grade starter template for building AI-powered SaaS applications.
 
-**Stack:** Next.js 15 · Supabase · Claude API · Stripe · TypeScript · Tailwind CSS · shadcn/ui
+**Stack:** Next.js 16 · Supabase · Claude API · Stripe · TypeScript · Tailwind CSS · shadcn/ui
 
 > Built by [Kevin Neuburger](https://www.upwork.com/freelancers/kevinneuburger) — patterns extracted from a real 60+ table, 100+ route production app.
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)](tsconfig.json)
 
-**[github.com/KNeu/nextjs-supabase-claude-starter](https://github.com/KNeu/nextjs-supabase-claude-starter)**
+**[github.com/KNeu/nextjs-supabase-claude-starter](https://github.com/KNeu/nextjs-supabase-claude-starter)** · **[Live demo →](https://your-demo-url.vercel.app)** ← *deploy your own and add the link here*
 
 ---
 
@@ -25,6 +25,173 @@ A production-grade starter template for building AI-powered SaaS applications.
 | **Billing** | Stripe Checkout, webhooks, customer portal, free/paid tiers |
 | **Rate limiting** | IP-based per-minute + user monthly message quotas |
 | **DX** | TypeScript strict, Zod validation, env validation, ESLint, Prettier |
+
+---
+
+## Setup
+
+No Docker. No local database. Just a free Supabase project and an API key.
+
+### 1. Clone and install
+
+```bash
+git clone https://github.com/KNeu/nextjs-supabase-claude-starter.git
+cd nextjs-supabase-claude-starter
+npm install
+```
+
+### 2. Create a Supabase project
+
+1. Go to [supabase.com](https://supabase.com) and create a free project (takes ~2 minutes)
+2. Once the project is ready, open **Project Settings → API** and copy:
+   - **Project URL**
+   - **anon / public** key
+   - **service_role** key
+
+### 3. Run the migrations
+
+In the Supabase Dashboard, open the **SQL Editor** and run each migration file in order:
+
+1. Paste and run [`supabase/migrations/001_initial_schema.sql`](supabase/migrations/001_initial_schema.sql)
+2. Paste and run [`supabase/migrations/002_rls_policies.sql`](supabase/migrations/002_rls_policies.sql)
+3. Paste and run [`supabase/migrations/003_storage.sql`](supabase/migrations/003_storage.sql)
+
+That's it — no CLI, no Docker, no `supabase db reset`.
+
+> **Tip:** If you want to seed sample data, run [`supabase/seed.sql`](supabase/seed.sql) in the SQL Editor too. It creates a `demo@example.com` / `password123` test user.
+
+### 4. Configure environment variables
+
+```bash
+cp .env.example .env.local
+```
+
+Open `.env.local` and fill in the three Supabase values from step 2, plus your Anthropic key:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+**Stripe** (optional — billing pages degrade gracefully without it):
+
+```env
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRO_PRICE_ID=price_...
+```
+
+For local Stripe webhook testing: `stripe listen --forward-to localhost:3000/api/webhooks/stripe`
+
+### 5. Run
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). Sign up for a new account, or sign in as `demo@example.com` / `password123` if you ran the seed.
+
+---
+
+## Deployment
+
+### Vercel
+
+1. Push your fork to GitHub
+2. Import the repo at [vercel.com/new](https://vercel.com/new)
+3. Add environment variables (copy from `.env.local`, swap Stripe test keys for live keys)
+4. Set `NEXT_PUBLIC_APP_URL` to your production URL (e.g. `https://yourapp.vercel.app`)
+5. Deploy
+
+### Supabase Auth redirect URL
+
+In the Supabase Dashboard → **Authentication → URL Configuration**, add your production URL:
+
+```
+https://yourapp.vercel.app/api/auth/callback
+```
+
+### Google OAuth (optional)
+
+In the Supabase Dashboard → **Authentication → Providers → Google**, add your Google OAuth credentials. Authorized redirect URI: `https://<your-project-ref>.supabase.co/auth/v1/callback`
+
+### Stripe webhooks (production)
+
+In the Stripe Dashboard → **Developers → Webhooks**, add an endpoint:
+
+```
+https://yourapp.vercel.app/api/webhooks/stripe
+```
+
+Subscribe to: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
+
+---
+
+## How to add a new resource
+
+This template establishes a repeatable pattern. Here's how to add a new resource (e.g. "projects"):
+
+### 1. Add a migration
+
+Create `supabase/migrations/004_projects.sql`, run it in the SQL Editor:
+
+```sql
+create table public.projects (
+  id         uuid primary key default uuid_generate_v4(),
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  name       text not null,
+  created_at timestamptz default now() not null,
+  updated_at timestamptz default now() not null
+);
+
+alter table public.projects enable row level security;
+create policy "projects: select own" on public.projects for select using (auth.uid() = user_id);
+create policy "projects: insert own" on public.projects for insert with check (auth.uid() = user_id);
+create policy "projects: update own" on public.projects for update using (auth.uid() = user_id);
+create policy "projects: delete own" on public.projects for delete using (auth.uid() = user_id);
+
+create trigger projects_updated_at before update on public.projects
+  for each row execute function public.handle_updated_at();
+```
+
+### 2. Regenerate types
+
+```bash
+npx supabase gen types typescript --project-id your-project-ref > src/types/database.types.ts
+```
+
+### 3. Add a validation schema
+
+```typescript
+// src/lib/validations/projects.ts
+import { z } from "zod";
+export const createProjectSchema = z.object({ name: z.string().min(1).max(200) });
+```
+
+### 4. Add Server Actions
+
+```typescript
+// src/app/actions/projects.ts — copy the pattern from src/app/actions/notes.ts
+```
+
+### 5. Add pages
+
+- `src/app/(dashboard)/projects/page.tsx` — list
+- `src/app/(dashboard)/projects/new/page.tsx` — create form
+- `src/app/(dashboard)/projects/[projectId]/page.tsx` — edit form
+
+### 6. Add nav item
+
+```typescript
+// src/components/layout/sidebar.tsx
+const navItems = [
+  // ...
+  { href: "/projects", label: "Projects", icon: FolderOpen },
+];
+```
 
 ---
 
@@ -132,172 +299,7 @@ supabase/
 │   ├── 001_initial_schema.sql   # Tables + triggers
 │   ├── 002_rls_policies.sql     # Row Level Security
 │   └── 003_storage.sql          # Storage buckets + policies
-└── seed.sql                     # Sample data for local dev
-```
-
----
-
-## Setup (under 10 minutes)
-
-### Prerequisites
-
-- Node.js 20+
-- [Supabase CLI](https://supabase.com/docs/guides/cli)
-- [Stripe CLI](https://stripe.com/docs/stripe-cli) (for webhook testing)
-
-### 1. Clone and install
-
-```bash
-git clone https://github.com/KNeu/nextjs-supabase-claude-starter.git
-cd nextjs-supabase-claude-starter
-npm install
-```
-
-### 2. Set up Supabase
-
-```bash
-# Start local Supabase (Docker required)
-supabase start
-
-# Apply migrations + seed data
-supabase db reset
-```
-
-### 3. Configure environment
-
-```bash
-cp .env.example .env.local
-```
-
-Fill in the values from `supabase status` output:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key from supabase status>
-SUPABASE_SERVICE_ROLE_KEY=<service_role key from supabase status>
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
-Stripe (optional for local dev — billing pages degrade gracefully):
-```bash
-stripe login
-stripe listen --forward-to localhost:3000/api/webhooks/stripe
-# Copy the webhook signing secret printed by the CLI
-```
-
-```env
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-STRIPE_PRO_PRICE_ID=price_...
-```
-
-### 4. Generate TypeScript types
-
-```bash
-npm run db:generate-types
-```
-
-### 5. Run the app
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000). Sign in with the seed user:
-- Email: `demo@example.com`
-- Password: `password123`
-
----
-
-## Deployment (Vercel + Supabase Cloud)
-
-### Supabase Cloud
-
-1. Create a project at [supabase.com](https://supabase.com)
-2. Push migrations: `supabase db push --linked`
-3. Enable Google OAuth: **Dashboard → Authentication → Providers → Google**
-4. Add redirect URL: `https://yourdomain.com/api/auth/callback`
-
-### Vercel
-
-1. Import the repository in the Vercel dashboard
-2. Add all environment variables from `.env.example`
-3. Set `NEXT_PUBLIC_APP_URL` to your production URL
-4. Deploy
-
-### Stripe Production
-
-1. Switch to live mode keys
-2. Create a webhook endpoint in the Stripe Dashboard pointing to `https://yourdomain.com/api/webhooks/stripe`
-3. Subscribe to: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
-
----
-
-## How to add a new resource
-
-This template establishes a pattern for adding any new resource (e.g., "projects", "todos"). Follow these steps:
-
-### Step 1: Database migration
-
-```sql
--- supabase/migrations/004_projects.sql
-create table public.projects (
-  id         uuid primary key default uuid_generate_v4(),
-  user_id    uuid not null references public.profiles(id) on delete cascade,
-  name       text not null,
-  created_at timestamptz default now() not null,
-  updated_at timestamptz default now() not null
-);
-
--- RLS
-alter table public.projects enable row level security;
-create policy "projects: select own" on public.projects for select using (auth.uid() = user_id);
-create policy "projects: insert own" on public.projects for insert with check (auth.uid() = user_id);
-create policy "projects: update own" on public.projects for update using (auth.uid() = user_id);
-create policy "projects: delete own" on public.projects for delete using (auth.uid() = user_id);
-
--- updated_at trigger
-create trigger projects_updated_at before update on public.projects
-  for each row execute function public.handle_updated_at();
-```
-
-### Step 2: Regenerate types
-
-```bash
-npm run db:generate-types
-```
-
-### Step 3: Add validation schema
-
-```typescript
-// src/lib/validations/projects.ts
-import { z } from "zod";
-export const createProjectSchema = z.object({ name: z.string().min(1).max(200) });
-```
-
-### Step 4: Add Server Actions
-
-```typescript
-// src/app/actions/projects.ts
-"use server";
-// Copy the pattern from src/app/actions/notes.ts
-```
-
-### Step 5: Add pages
-
-- `src/app/(dashboard)/projects/page.tsx` — list view
-- `src/app/(dashboard)/projects/new/page.tsx` — create form
-- `src/app/(dashboard)/projects/[projectId]/page.tsx` — edit form
-
-### Step 6: Add nav item in sidebar
-
-```typescript
-// src/components/layout/sidebar.tsx
-const navItems = [
-  // ...existing items
-  { href: "/projects", label: "Projects", icon: FolderOpen },
-];
+└── seed.sql                     # Optional sample data
 ```
 
 ---
@@ -322,19 +324,40 @@ const navItems = [
 
 ---
 
-## Key decisions / why things are done this way
+## Key decisions
 
 **Why `@supabase/ssr` instead of `@supabase/auth-helpers-nextjs`?**
 The `@supabase/auth-helpers-nextjs` package is deprecated. `@supabase/ssr` is the current recommended approach for Next.js App Router. It handles cookie management correctly for both client and server contexts.
 
 **Why Server Actions for mutations instead of API routes?**
-Server Actions are the Next.js 15 idiomatic pattern for mutations. They colocate the mutation logic with the components, provide automatic CSRF protection, and integrate with `revalidatePath` for cache invalidation.
+Server Actions are the Next.js idiomatic pattern for mutations. They colocate mutation logic with the component, provide automatic CSRF protection, and integrate with `revalidatePath` for cache invalidation.
 
 **Why raw SSE instead of Vercel AI SDK for streaming?**
-Raw Server-Sent Events give full control over the streaming format, let you save to the database _after_ the stream completes without a separate endpoint, and avoid an additional dependency. The pattern is the same — `ReadableStream` with SSE framing.
+Raw Server-Sent Events give full control over the streaming format, let you save to the database _after_ the stream completes without a separate endpoint, and avoid an additional dependency. The pattern is `ReadableStream` with SSE framing.
 
 **Why in-memory rate limiting instead of Redis?**
 Good enough for a single-instance deployment and zero infrastructure cost. The comment in `rate-limit.ts` shows exactly what to swap in when you scale horizontally.
+
+---
+
+## Local development with Supabase CLI (optional)
+
+If you prefer a fully local setup (no network dependency, offline support):
+
+```bash
+# Requires Docker
+brew install supabase/tap/supabase
+supabase start
+supabase db reset   # applies migrations + seed
+
+# Update .env.local with values from `supabase status`
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+```
+
+To regenerate types against the local instance:
+```bash
+npm run db:generate-types   # uses supabase gen types --local
+```
 
 ---
 
