@@ -80,7 +80,7 @@ export default function LandingPage() {
           </Button>
           <Button size="lg" variant="outline" asChild>
             <a
-              href="https://github.com/kevinneuburger/nextjs-supabase-claude-starter"
+              href="https://github.com/KNeu/nextjs-supabase-claude-starter"
               target="_blank"
               rel="noopener noreferrer"
             >

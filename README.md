@@ -9,6 +9,8 @@ A production-grade starter template for building AI-powered SaaS applications.
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)](tsconfig.json)
 
+**[github.com/KNeu/nextjs-supabase-claude-starter](https://github.com/KNeu/nextjs-supabase-claude-starter)**
+
 ---
 
 ## What's included
@@ -146,7 +148,7 @@ supabase/
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/kevinneuburger/nextjs-supabase-claude-starter.git
+git clone https://github.com/KNeu/nextjs-supabase-claude-starter.git
 cd nextjs-supabase-claude-starter
 npm install
 ```
